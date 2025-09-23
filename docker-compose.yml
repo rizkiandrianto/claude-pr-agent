@@ -1,0 +1,21 @@
+version: "3.9"
+services:
+  webhook:
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: 8080
+      BB_CLIENT_ID: ${BB_CLIENT_ID}
+      BB_CLIENT_SECRET: ${BB_CLIENT_SECRET}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+      ENABLE_DESCRIBE: "1"
+      ENABLE_REVIEW: "1"
+      ENABLE_INLINE: "1"
+      MAX_INLINE_COMMENTS: "10"
+      MAX_DESC_APPEND_CHARS: "2500"
+      # Claude Code stores creds under /data via XDG_* envs already baked in
+    ports:
+      - "8080:8080"
+    # volumes:
+    #   - ./claude-config:/data
+
