@@ -11,7 +11,7 @@ app.use(express.json({ verify: (req: any, _res, buf) => (req.rawBody = buf) }));
 
 app.get("/healthz", (_req, res) => res.json({ ok: true }));
 
-app.post("/webhook", async (req: Request & { rawBody?: Buffer }, res: Response) => {
+app.post("/webhook/bitbucket", async (req: Request & { rawBody?: Buffer }, res: Response) => {
   try {
     console.log("Webhook event received");
     
@@ -41,8 +41,13 @@ app.post("/webhook", async (req: Request & { rawBody?: Buffer }, res: Response) 
 
     const results: any = { event, pr: prId };
 
+    // Check query parameters for feature control (defaults to env vars)
+    const enableDescribe = req.query.describe !== "false" && process.env.ENABLE_DESCRIBE === "1";
+    const enableReview = req.query.review !== "false" && process.env.ENABLE_REVIEW === "1";
+    const enableInline = req.query.inline !== "false" && process.env.ENABLE_INLINE === "1";
+
     // 1) Describe: append (idempotent-ish marker)
-    if (process.env.ENABLE_DESCRIBE === "1") {
+    if (enableDescribe) {
       const descAdd = await runClaudeDescribe(diffText);
       if (descAdd && !(prObj.description || "").includes("### 🤖 AI Summary")) {
         const clipped = descAdd.slice(0, Number(process.env.MAX_DESC_APPEND_CHARS || 2500));
@@ -55,7 +60,7 @@ app.post("/webhook", async (req: Request & { rawBody?: Buffer }, res: Response) 
     }
 
     // 2) Review: post top-level
-    if (process.env.ENABLE_REVIEW === "1") {
+    if (enableReview) {
       const review = await runClaudeReview(diffText);
       if (review) {
         const created = await postPRComment(token, workspace, repo_slug, prId, review) as { id: string };
@@ -64,7 +69,7 @@ app.post("/webhook", async (req: Request & { rawBody?: Buffer }, res: Response) 
     }
 
     // 3) Inline: optional
-    if (process.env.ENABLE_INLINE === "1") {
+    if (enableInline) {
       const inline = await runClaudeInline(diffText);
       const cap = Math.min(inline.length, Number(process.env.MAX_INLINE_COMMENTS || 10));
       const posted = [];
