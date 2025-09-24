@@ -13,9 +13,12 @@ services:
       ENABLE_INLINE: "1"
       MAX_INLINE_COMMENTS: "10"
       MAX_DESC_APPEND_CHARS: "2500"
-      # Claude Code stores creds under /data via XDG_* envs already baked in
+      # explicit, though also set in image:
+      HOME: /data
+      XDG_CONFIG_HOME: /data/.config
+      XDG_CACHE_HOME: /data/.cache
+      XDG_DATA_HOME: /data/.local/share
     ports:
       - "8080:8080"
-    # volumes:
-    #   - ./claude-config:/data
-
+    volumes:
+      - ./claude-config:/data
