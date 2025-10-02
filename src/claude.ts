@@ -9,7 +9,18 @@ export async function runClaudeDescribe(diff: string): Promise<string> {
     "• Risks and breaking changes",
     "• Tests/validation status",
     "• Follow-ups / TODOs",
-    "Output: clean markdown with each bullet point on a separate line, no code fences."
+    "Output: clean markdown with each bullet point on a separate line, no code fences.",
+    "",
+    "After the bullet points, add:",
+    "",
+    "Human effort:",
+    "10 days (this is just an example)",
+    "",
+    "Claude Code effort:",
+    "2 days (this is just an example)",
+    "",
+    "Productivity increase:",
+    "5x  (this is just an example)"
   ].join("\n");
 
   const out = await runClaudeHeadless(prompt, diff, "single-markdown");
@@ -20,7 +31,12 @@ export async function runClaudeReview(diff: string): Promise<string> {
   const prompt = [
     "Act as a senior staff engineer. Review the PR diff.",
     "Focus on: correctness, security, performance, readability, tests.",
-    "Output: Markdown with sections: Overview, Strengths, Risks, Action Items."
+    "Output: Markdown with sections: Overview, Strengths, Risks, Action Items.",
+    "",
+    "After the Action Items section, add:",
+    "",
+    "PR Review Effort: 1/5 (this is just an example, 1 is easy and not taking long time while 5 is the hardest)",
+    "Estimating PR Review: 3 minutes (this is just an example)"
   ].join("\n");
   const out = await runClaudeHeadless(prompt, diff, "single-markdown");
   return out.trim();
