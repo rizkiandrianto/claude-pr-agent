@@ -4,23 +4,30 @@ type InlineItem = { path: string; to: number; message: string };
 
 export async function runClaudeDescribe(diff: string): Promise<string> {
   const prompt = [
-    "You are an expert reviewer. Summarize this PR diff in 6-10 bullet points:",
-    "• What changed (features/refactors/migrations)",
-    "• Risks and breaking changes",
-    "• Tests/validation status",
-    "• Follow-ups / TODOs",
-    "Output: clean markdown with each bullet point on a separate line, no code fences.",
+    "You are an expert PR reviewer. Analyze this PR diff and provide:",
     "",
-    "After the bullet points, add:",
+    "## Summary",
+    "Provide 6-10 concise bullet points covering:",
+    "- What changed (features, refactors, migrations, bug fixes)",
+    "- Risks and breaking changes",
+    "- Test coverage and validation status",
+    "- Follow-ups, TODOs, or recommended improvements",
     "",
-    "Human effort:",
-    "10 days (this is just an example)",
+    "Output clean markdown with each bullet point on a separate line, no code fences.",
     "",
-    "Claude Code effort:",
-    "2 days (this is just an example)",
+    "## Effort Analysis",
+    "Based on the scale and complexity of the changes, estimate:",
     "",
-    "Productivity increase:",
-    "5x  (this is just an example)"
+    "- **Estimated human effort:** [X hours/days]",
+    "- **Estimated Claude Code effort:** [Y hours/days]",
+    "- **Productivity multiplier:** [Z]x",
+    "",
+    "Guidelines for effort estimation:",
+    "- Small changes (< 50 lines, simple logic): Use minutes or hours (e.g., \"2 hours\" → \"30 minutes\")",
+    "- Medium changes (50-300 lines, moderate complexity): Use hours or days (e.g., \"1-2 days\" → \"4-6 hours\")",
+    "- Large changes (300+ lines, high complexity): Use days (e.g., \"5 days\" → \"1 day\")",
+    "- Consider: code complexity, testing requirements, refactoring scope, and domain knowledge needed",
+    "- Be realistic: if a change is trivial, acknowledge it (e.g., \"30 min\" → \"5 min\", 6x faster)"
   ].join("\n");
 
   const out = await runClaudeHeadless(prompt, diff, "single-markdown");
@@ -29,14 +36,34 @@ export async function runClaudeDescribe(diff: string): Promise<string> {
 
 export async function runClaudeReview(diff: string): Promise<string> {
   const prompt = [
-    "Act as a senior staff engineer. Review the PR diff.",
-    "Focus on: correctness, security, performance, readability, tests.",
-    "Output: Markdown with sections: Overview, Strengths, Risks, Action Items.",
+    "You're a senior engineer reviewing this PR. Keep it straightforward and actionable.",
     "",
-    "After the Action Items section, add:",
+    "Focus on:",
+    "- Correctness: Does it work? Any bugs or edge cases?",
+    "- Security: Any vulnerabilities or data exposure?",
+    "- Performance: Any obvious inefficiencies?",
+    "- Readability: Is it clear what the code does?",
+    "- Tests: Are critical paths covered?",
     "",
-    "PR Review Effort: 1/5 (this is just an example, 1 is easy and not taking long time while 5 is the hardest)",
-    "Estimating PR Review: 3 minutes (this is just an example)"
+    "Format your review as:",
+    "",
+    "## What This PR Does",
+    "Brief summary in plain English.",
+    "",
+    "## What Works Well",
+    "2-3 specific things done right. Be concrete.",
+    "",
+    "## Issues to Address",
+    "**Blocking:** Must fix before merge (bugs, security, breaking changes)",
+    "**Should Fix:** Important but not blocking (performance, clarity, tech debt)",
+    "**Nice to Have:** Optional improvements (style, refactoring)",
+    "",
+    "## Bottom Line",
+    "Clear approve/request changes/needs discussion.",
+    "",
+    "---",
+    "- **Review Complexity:** [1-5]/5 (1=trivial, 5=requires deep domain knowledge)",
+    "- **Time Spent:** ~[X] minutes"
   ].join("\n");
   const out = await runClaudeHeadless(prompt, diff, "single-markdown");
   return out.trim();
