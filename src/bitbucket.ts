@@ -1,4 +1,5 @@
 import fetch from "node-fetch";
+import { retryWithBackoff, isRetryableError } from "./retry.js";
 
 const API = "https://api.bitbucket.org/2.0";
 
@@ -57,12 +58,22 @@ export async function postPRComment(token: string, workspace: string, repo: stri
 export async function postInlineComment(
   token: string, workspace: string, repo: string, prId: number, path: string, toLine: number, text: string
 ) {
-  const res = await fetch(`${API}/repositories/${workspace}/${repo}/pullrequests/${prId}/comments`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ content: { raw: text }, inline: { path, to: toLine } })
+  return retryWithBackoff(async () => {
+    const res = await fetch(`${API}/repositories/${workspace}/${repo}/pullrequests/${prId}/comments`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ content: { raw: text }, inline: { path, to: toLine } })
+    });
+    if (!res.ok) {
+      const errorText = await res.text();
+      const error: any = new Error(`postInlineComment: ${res.status} ${errorText}`);
+      error.status = res.status;
+      throw error;
+    }
+    return res.json();
+  }, {
+    maxRetries: 3,
+    retryableErrors: isRetryableError
   });
-  if (!res.ok) throw new Error(`postInlineComment: ${res.status} ${await res.text()}`);
-  return res.json();
 }
 

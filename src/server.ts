@@ -4,6 +4,9 @@ import type { Request, Response } from "express";
 import { verifyWebhookSignature, parseWorkspaceRepo } from "./utils.js";
 import { getAccessToken, getPR, getPRDiff, postPRComment, postInlineComment, updatePRDescription } from "./bitbucket.js";
 import { runClaudeDescribe, runClaudeReview, runClaudeInline } from "./claude.js";
+import { RateLimiter } from "./retry.js";
+
+const rateLimiter = new RateLimiter(3, 200); // Max 3 concurrent, 200ms between calls
 
 const app = express();
 // preserve raw body for signature verify
@@ -78,14 +81,18 @@ app.post("/webhook/bitbucket", async (req: Request & { rawBody?: Buffer }, res: 
           const inline = await runClaudeInline(diffText);
           const cap = Math.min(inline.length, Number(process.env.MAX_INLINE_COMMENTS || 10));
           const posted = [];
-          console.log(`Posting ${cap} inline comments...`);
+          console.log(`Posting ${cap} inline comments (high-signal findings only)...`);
 
           for (let i = 0; i < cap; i++) {
             const it = inline[i];
             try {
-              const r = await postInlineComment(token, workspace, repo_slug, prId, it.path, it.to, `🤖 ${it.message}`) as { id: string };
+              // Use rate limiter to avoid overwhelming Bitbucket API
+              const r = await rateLimiter.execute(() =>
+                postInlineComment(token, workspace, repo_slug, prId, it.path, it.to, it.message)
+              ) as { id: string };
               posted.push({ path: it.path, to: it.to, id: r.id });
             } catch (e: any) {
+              console.error(`Failed to post inline comment at ${it.path}:${it.to}:`, e?.message || e);
               posted.push({ path: it.path, to: it.to, error: String(e?.message || e) });
             }
           }
