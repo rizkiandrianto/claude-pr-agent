@@ -173,3 +173,87 @@ export function extractLineContext(file: ParsedFile, targetLine: number, context
 
   return null;
 }
+
+/**
+ * Convert a unified diff into a formatted string with explicit line numbers.
+ * Similar to pr-agent's decouple_and_convert_to_hunks_with_lines_numbers.
+ *
+ * This makes it much easier for LLMs to understand the diff and provide
+ * accurate line-number-based suggestions.
+ *
+ * Example output:
+ * ## File: 'src/file.ts'
+ *
+ * @@ -10,5 +10,6 @@ function example
+ * __new hunk__
+ * 10  function example() {
+ * 11    console.log("hello");
+ * 12 +  const x = 1;
+ * 13    return true;
+ * 14  }
+ * __old hunk__
+ *  function example() {
+ *    console.log("hello");
+ * -  return true;
+ *  }
+ */
+export function formatDiffWithLineNumbers(diff: string): string {
+  const parsedDiff = parseDiff(diff);
+  const sections: string[] = [];
+
+  for (const file of parsedDiff.files) {
+    sections.push(`\n## File: '${file.path}'\n`);
+
+    for (const hunk of file.hunks) {
+      const newContentLines: Array<{ lineNum: number; content: string }> = [];
+      const oldContentLines: string[] = [];
+      let newLineNum = hunk.newStart;
+
+      // Build the hunk header
+      const hunkHeader = `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@${hunk.header ? ' ' + hunk.header : ''}`;
+
+      // Process each line in the hunk
+      for (const line of hunk.lines) {
+        if (line.startsWith("+") && !line.startsWith("+++")) {
+          // Added line
+          newContentLines.push({ lineNum: newLineNum, content: line });
+          newLineNum++;
+        } else if (line.startsWith("-") && !line.startsWith("---")) {
+          // Deleted line
+          oldContentLines.push(line);
+        } else if (!line.startsWith("---") && !line.startsWith("+++")) {
+          // Context line (unchanged)
+          newContentLines.push({ lineNum: newLineNum, content: line });
+          oldContentLines.push(line);
+          newLineNum++;
+        }
+      }
+
+      // Only add the hunk if it has additions or deletions
+      const hasAdditions = newContentLines.some(l => l.content.startsWith("+"));
+      const hasDeletions = oldContentLines.some(l => l.startsWith("-"));
+
+      if (hasAdditions || hasDeletions) {
+        sections.push(`\n${hunkHeader}`);
+
+        // Add __new hunk__ section
+        if (hasAdditions || hasDeletions) {
+          sections.push('__new hunk__');
+          for (const { lineNum, content } of newContentLines) {
+            sections.push(`${lineNum} ${content}`);
+          }
+        }
+
+        // Add __old hunk__ section if there are deletions
+        if (hasDeletions) {
+          sections.push('__old hunk__');
+          for (const content of oldContentLines) {
+            sections.push(content);
+          }
+        }
+      }
+    }
+  }
+
+  return sections.join('\n').trim();
+}

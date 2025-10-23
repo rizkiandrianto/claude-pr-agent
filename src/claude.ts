@@ -1,5 +1,5 @@
 import { spawn } from "child_process";
-import { parseDiff, getModifiedLineNumbers } from "./diffParser.js";
+import { parseDiff, getModifiedLineNumbers, formatDiffWithLineNumbers } from "./diffParser.js";
 
 type InlineItem = { path: string; to: number; message: string };
 
@@ -102,8 +102,17 @@ export async function runClaudeReview(diff: string): Promise<string> {
 }
 
 export async function runClaudeInline(diff: string): Promise<InlineItem[]> {
+  // Pre-process the diff to format it with explicit line numbers
+  // This makes it much easier for Claude to understand and provide accurate suggestions
+  const formattedDiff = formatDiffWithLineNumbers(diff);
+
   const prompt = [
-    "From the unified diff, propose specific inline code suggestions.",
+    "From the formatted diff below, propose specific inline code suggestions.",
+    "The diff is formatted with explicit line numbers for easier understanding.",
+    "Each hunk shows:",
+    "  - '__new hunk__': New content with line numbers (+ prefix for additions)",
+    "  - '__old hunk__': Old content being removed (- prefix for deletions)",
+    "",
     "Return a JSON array of objects with the following structure:",
     "",
     "{",
@@ -118,7 +127,7 @@ export async function runClaudeInline(diff: string): Promise<InlineItem[]> {
     "}",
     "",
     "IMPORTANT RULES:",
-    "1. Target DESTINATION line numbers only (the + side from @@ -x,y +DEST,d @@)",
+    "1. Use the line numbers shown in the '__new hunk__' section (DESTINATION/new file line numbers)",
     "2. Only include HIGH-SIGNAL findings:",
     "   - bug_risk: Potential bugs, null checks, race conditions, logic errors",
     "   - security: SQL injection, XSS, auth issues, exposed secrets",
@@ -133,7 +142,7 @@ export async function runClaudeInline(diff: string): Promise<InlineItem[]> {
     "Output only valid JSON array, no markdown formatting."
   ].join("\n");
 
-  const out = await runClaudeHeadless(prompt, diff, "json");
+  const out = await runClaudeHeadless(prompt, formattedDiff, "json");
   try {
     const parsed = JSON.parse(out);
     if (!Array.isArray(parsed)) return [];
