@@ -154,10 +154,8 @@ export async function runClaudeInline(diff: string): Promise<InlineItem[]> {
 
   try {
     const parsed = JSON.parse(out);
-    console.log('Parsed parsed:', parsed);
     const result = parseClaudeArray(parsed.result || "");
-    
-    console.log('Parsed inline suggestions:', typeof result, result);
+    console.info(parsed);
 
     if (!Array.isArray(result)) return [];
 
