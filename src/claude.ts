@@ -1,5 +1,6 @@
 import { spawn } from "child_process";
-import { parseDiff, getModifiedLineNumbers, formatDiffWithLineNumbers } from "./diffParser.js";
+import { formatDiffWithLineNumbers } from "./diffParser.js";
+import { parseClaudeArray } from "./utils.js";
 
 type InlineItem = { path: string; to: number; message: string };
 
@@ -107,13 +108,15 @@ export async function runClaudeInline(diff: string): Promise<InlineItem[]> {
   const formattedDiff = formatDiffWithLineNumbers(diff);
 
   const prompt = [
-    "From the formatted diff below, propose specific inline code suggestions.",
+    "You are an automated code review assistant.",
+    "Analyze the given diff and propose **specific inline code suggestions** based on high-signal issues.",
+    "",
     "The diff is formatted with explicit line numbers for easier understanding.",
     "Each hunk shows:",
     "  - '__new hunk__': New content with line numbers (+ prefix for additions)",
     "  - '__old hunk__': Old content being removed (- prefix for deletions)",
     "",
-    "Return a JSON array of objects with the following structure:",
+    "Return ONLY a valid JSON array of objects with the following structure:",
     "",
     "{",
     '  "relevant_file": "path/to/file.ts",',
@@ -127,49 +130,47 @@ export async function runClaudeInline(diff: string): Promise<InlineItem[]> {
     "}",
     "",
     "IMPORTANT RULES:",
-    "1. Use the line numbers shown in the '__new hunk__' section (DESTINATION/new file line numbers)",
-    "2. Only include HIGH-SIGNAL findings:",
+    "1. Use line numbers from the '__new hunk__' (destination / new file lines).",
+    "2. Only include HIGH-SIGNAL findings with score >= 6:",
     "   - bug_risk: Potential bugs, null checks, race conditions, logic errors",
     "   - security: SQL injection, XSS, auth issues, exposed secrets",
     "   - performance: N+1 queries, memory leaks, inefficient algorithms",
     "   - code_smell: TODO/FIXME, console.log, commented code, dead code",
-    "   - best_practice: Missing error handling, unclear naming",
+    "   - best_practice: Missing error handling, unclear naming, better structure",
     "   - todo_cleanup: Leftover debug code, temporary hacks",
-    "3. Score 1-10 (only include findings with score >= 6)",
-    "4. Include existing_code and improved_code when suggesting fixes",
-    "5. If no high-signal findings, return [] only",
+    "3. Include existing_code and improved_code when suggesting fixes.",
+    "4. If no findings meet the criteria, return [] exactly.",
     "",
-    "Output only valid JSON array, no markdown formatting."
-  ].join("\n");
+    "STRICT OUTPUT RULES:",
+    "- Do NOT include any markdown code fences (like ```json).",
+    "- Do NOT include any natural language explanation or extra text.",
+    "- The output MUST start with '[' and end with ']' — valid JSON array only.",
+    "- Validate that your response parses as JSON before finalizing.",
+    "",
+    "Now, produce the JSON array only."
+  ].join("\\n");
 
   const out = await runClaudeHeadless(prompt, formattedDiff, "json");
+
   try {
     const parsed = JSON.parse(out);
-    if (!Array.isArray(parsed)) return [];
+    console.log('Parsed parsed:', parsed);
+    const result = parseClaudeArray(parsed.result || "");
+    
+    console.log('Parsed inline suggestions:', typeof result, result);
 
-    // Parse diff to validate line numbers
-    const parsedDiff = parseDiff(diff);
-    const fileMap = new Map<string, Set<number>>();
-
-    parsedDiff.files.forEach(file => {
-      const validLines = new Set(getModifiedLineNumbers(file));
-      fileMap.set(file.path, validLines);
-    });
+    if (!Array.isArray(result)) return [];
 
     // Validate and filter suggestions
     const validated: InlineItem[] = [];
-    for (const suggestion of parsed.slice(0, 25)) {
+    for (const suggestion of result.slice(0, 25)) {
       if (!isValidSuggestion(suggestion)) continue;
 
       // Filter by score threshold (only high-priority findings)
       if (suggestion.score < 6) continue;
 
-      const validLines = fileMap.get(suggestion.relevant_file);
-      if (!validLines) continue;
-
       // Use the end line as the target (where comment will appear)
       const targetLine = suggestion.relevant_lines_end;
-      if (!validLines.has(targetLine)) continue;
 
       // Format rich message
       const message = formatInlineComment(suggestion);
